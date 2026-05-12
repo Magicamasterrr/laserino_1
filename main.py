@@ -72,3 +72,40 @@ def keccak256(data: bytes) -> bytes:
 
 
 def pad32(b: bytes) -> bytes:
+    return b.rjust(32, b"\x00")[-32:]
+
+
+def addr_to_bytes(addr: str) -> bytes:
+    hx = addr.lower().removeprefix("0x")
+    if len(hx) != 40:
+        raise ValueError("address length")
+    return bytes.fromhex(hx)
+
+
+def u256_bytes(x: int) -> bytes:
+    if x < 0 or x >= 1 << 256:
+        raise ValueError("u256 range")
+    return x.to_bytes(32, "big")
+
+
+def encode_divine_order_struct(
+    order_typehash: bytes,
+    token_id: int,
+    price_wei: int,
+    nonce: int,
+    deadline: int,
+    buyer: str,
+) -> bytes:
+    if eth_abi_encode is None:
+        raise RuntimeError("eth_abi is required for precise struct hashing; pip install eth_abi")
+    if Web3 is None:
+        buyer_a = buyer
+    else:
+        buyer_a = Web3.to_checksum_address(buyer)
+    payload = eth_abi_encode(
+        ["bytes32", "uint256", "uint256", "uint256", "uint256", "address"],
+        [order_typehash, token_id, price_wei, nonce, deadline, buyer_a],
+    )
+    return keccak256(payload)
+
+
