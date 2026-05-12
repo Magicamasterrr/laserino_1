@@ -109,3 +109,40 @@ def encode_divine_order_struct(
     return keccak256(payload)
 
 
+def eip712_digest(domain_separator: bytes, struct_hash: bytes) -> bytes:
+    if len(domain_separator) != 32 or len(struct_hash) != 32:
+        raise ValueError("digest inputs")
+    return keccak256(b"\x19\x01" + domain_separator + struct_hash)
+
+
+@dataclasses.dataclass(frozen=True)
+class RpcEndpoint:
+    url: str
+    weight: int = 1
+    name: str = "rpc"
+
+
+@dataclasses.dataclass
+class LaserinoConfig:
+    rpc_urls: Tuple[RpcEndpoint, ...]
+    contract_address: str
+    chain_id: int
+    poll_interval_s: float = 1.25
+    pulse_tag_seed: str = "divine-lane"
+    http_timeout_s: float = 22.0
+    max_retries: int = 5
+    max_inflight: int = 8
+
+
+class StructuredLogger:
+    def __init__(self, name: str) -> None:
+        self._log = logging.getLogger(name)
+
+    def event(self, kind: str, **fields: Any) -> None:
+        payload = {"kind": kind, "ts": time.time(), **fields}
+        self._log.info(json.dumps(payload, default=str))
+
+
+class RingBuffer:
+    def __init__(self, capacity: int) -> None:
+        self._cap = max(1, capacity)
