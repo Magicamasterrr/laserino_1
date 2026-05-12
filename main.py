@@ -35,3 +35,40 @@ try:
 except Exception:  # pragma: no cover
     eth_abi_encode = None
 
+try:
+    from eth_account import Account
+    from eth_account.messages import encode_defunct
+except Exception:  # pragma: no cover
+    Account = None
+    encode_defunct = None
+
+try:
+    from web3 import Web3
+except Exception:  # pragma: no cover
+    Web3 = None
+
+T = TypeVar("T")
+LOG = logging.getLogger("laserino_1")
+
+
+def keccak256(data: bytes) -> bytes:
+    try:
+        from Crypto.Hash import keccak
+
+        k = keccak.new(digest_bits=256)
+        k.update(data)
+        return k.digest()
+    except Exception:
+        try:
+            import sha3  # type: ignore
+
+            k = sha3.keccak_256()
+            k.update(data)
+            return k.digest()
+        except Exception:
+            raise RuntimeError(
+                "keccak256 requires pycryptodome or pysha3; pip install pycryptodome"
+            ) from None
+
+
+def pad32(b: bytes) -> bytes:
