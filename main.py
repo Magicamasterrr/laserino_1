@@ -294,3 +294,40 @@ def eth_call_contract(url: str, to: str, data: str, timeout_s: float) -> bytes:
 def selector(sig: str) -> bytes:
     return keccak256(sig.encode("ascii"))[:4]
 
+
+def encode_call(sig: str, types: Sequence[str], values: Sequence[Any]) -> str:
+    if eth_abi_encode is None:
+        raise RuntimeError("eth_abi required")
+    head = selector(sig)
+    body = eth_abi_encode(list(types), list(values))
+    return "0x" + (head + body).hex()
+
+
+class DivineBridge:
+    def __init__(self, cfg: LaserinoConfig) -> None:
+        self.cfg = cfg
+        self.http = HttpJsonClient(cfg.http_timeout_s)
+        self.slog = StructuredLogger("laserino_1.bridge")
+        self.history = RingBuffer(640)
+        self.backoff = ExponentialBackoff()
+
+    def _rpc_url(self) -> str:
+        return pick_weighted_endpoints(self.cfg.rpc_urls).url
+
+    def snapshot_metrics(self) -> Dict[str, Any]:
+        if Web3 is None:
+            return self._snapshot_metrics_raw()
+        w3 = Web3(Web3.HTTPProvider(self._rpc_url(), request_kwargs={"timeout": self.cfg.http_timeout_s}))
+        c = w3.eth.contract(address=Web3.to_checksum_address(self.cfg.contract_address), abi=ABI_MIN)
+        dom = c.functions.DOMAIN_SEPARATOR().call()
+        minted = int(c.functions.totalMinted().call())
+        circ = int(c.functions.circulatingSupply().call())
+        supply = int(c.functions.totalSupply().call())
+        out = {
+            "domain_separator": dom.hex() if hasattr(dom, "hex") else Web3.to_hex(dom),
+            "minted": minted,
+            "circulating": circ,
+            "inventory": supply,
+        }
+        self.history.push(out)
+        return out
