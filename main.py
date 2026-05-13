@@ -368,3 +368,40 @@ class DivineBridge:
         buyer: str,
     ) -> bytes:
         oth = self.fetch_order_typehash()
+        dom = self.fetch_domain_separator()
+        struct_hash = encode_divine_order_struct(oth, token_id, price_wei, nonce, deadline, buyer)
+        return eip712_digest(dom, struct_hash)
+
+    def hash_order_chain(
+        self,
+        token_id: int,
+        price_wei: int,
+        nonce: int,
+        deadline: int,
+        buyer: str,
+    ) -> bytes:
+        url = self._rpc_url()
+        to = self.cfg.contract_address
+        if Web3 is None:
+            raise RuntimeError("Web3 required for hashOrder chain verification in this path")
+        w3 = Web3(Web3.HTTPProvider(url, request_kwargs={"timeout": self.cfg.http_timeout_s}))
+        c = w3.eth.contract(address=Web3.to_checksum_address(to), abi=ABI_MIN)
+        h = c.functions.hashOrder(token_id, price_wei, nonce, deadline, Web3.to_checksum_address(buyer)).call()
+        return bytes(h)
+
+
+class PulsePlanner:
+    def __init__(self, seed: str) -> None:
+        self.seed = seed.encode("utf-8")
+
+    def next_payload(self, token_id: int, seq: int) -> str:
+        msg = f"{token_id}:{seq}".encode("utf-8")
+        digest = hashlib.sha256(self.seed + msg).digest()
+        return "0x" + digest.hex()
+
+
+class OrderCoach:
+    @staticmethod
+    def describe_order(
+        token_id: int, price_wei: int, nonce: int, deadline: int, buyer: str
+    ) -> Dict[str, Any]:
